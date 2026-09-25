@@ -21,6 +21,7 @@ from c2.control import ControlCollection, StateControl, Log10Mapper
 from c2.drmoutput import DRMOutput
 from c2.edid import check_edid
 from c2.gamma import open_isp, generate_curve, set_isp_gamma
+from c2.socketbridge import SocketVideoBridge
 
 from c2.user_interface import UI
 
@@ -86,8 +87,14 @@ class Camera:
             self.stream = PyavOutput("rtsp://127.0.0.1:8554/cam", format="rtsp")
             self.encoder.output = self.stream
 
+        if self.config.socket_bridge.enabled:
+            self.socket_bridge = SocketVideoBridge("/run/c2-video.sock")
+
         def preview(request):
             self.update_preview(request)
+            if self.config.socket_bridge.enabled and self.socket_bridge.has_client():
+                with MappedArray(request, "main") as mapped:
+                    self.socket_bridge.push_frame(mapped.array.tobytes())
 
         self.cam.pre_callback = preview
 

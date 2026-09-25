@@ -65,6 +65,11 @@ class SensorConfig:
             return libcamera.controls.draft.NoiseReductionModeEnum.Off
 
 
+class SocketBridgeConfig:
+    def __init__(self):
+        self.enabled = True
+
+
 class AudioConfig:
     def __init__(self):
         self.input_device = 'sndc2audioadc'
@@ -84,6 +89,7 @@ class Config:
         self.aux = AuxConfig()
         self.encoder = EncoderConfig()
         self.sensor = SensorConfig()
+        self.socket_bridge = SocketBridgeConfig()
         self.audio = AudioConfig()
 
         self.load_defaults()
@@ -137,7 +143,7 @@ class Config:
             self.sensor.framerate = min(30, self.sensor.framerate)
 
     def save_config(self):
-        sections = ["sensor", "output", "monitor", "aux", "encoder", "audio"]
+        sections = ["sensor", "output", "monitor", "aux", "encoder", "socket_bridge", "audio"]
         parser = configparser.ConfigParser()
         for section in sections:
             parser.add_section(section)
