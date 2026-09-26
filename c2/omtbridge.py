@@ -5,6 +5,7 @@ the camera capture thread. If the child dies it's respawned, mirroring the
 `Restart=on-failure` / `RestartSec=1` this used to get from systemd.
 """
 
+import fcntl
 import subprocess
 import threading
 import time
@@ -21,6 +22,9 @@ class OmtBridge:
             "--height", str(height),
             "--fps", str(fps),
         ]
+        # UYVY is 2 bytes/pixel - sized so a whole frame fits in the pipe's
+        # kernel buffer instead of write() blocking until the child drains it.
+        self._pipe_size = width * height * 2
 
         self._latest = None
         self._cond = threading.Condition()
@@ -32,12 +36,23 @@ class OmtBridge:
 
     def _spawn(self):
         proc = subprocess.Popen(self._cmd, stdin=subprocess.PIPE)
+        try:
+            fcntl.fcntl(proc.stdin.fileno(), fcntl.F_SETPIPE_SZ, self._pipe_size)
+        except OSError:
+            pass
         with self._proc_lock:
             self._proc = proc
 
     def is_running(self):
         with self._proc_lock:
             return self._proc is not None and self._proc.poll() is None
+
+    def wants_frame(self):
+        """False while the previous frame is still queued/being sent - lets
+        the caller skip capturing a new one instead of computing work that
+        would just be dropped."""
+        with self._cond:
+            return self._latest is None
 
     def push_frame(self, data):
         with self._cond:
