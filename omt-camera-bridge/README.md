@@ -1,11 +1,12 @@
 # omt-camera-bridge
 
-Reads raw YUV420 (I420) camera frames from the `c2` Python app over a local
-Unix socket, converts them to UYVY, and streams them out over
+Reads raw YUV420 (I420) camera frames from the `c2` Python app over stdin,
+converts them to UYVY, and streams them out over
 [Open Media Transport](https://www.openmediatransport.org/) (OMT) so the
 camera shows up as a source in OBS, vMix, etc.
 
-See `../c2/socketbridge.py` for the Python side that feeds this process.
+`c2` spawns this as a subprocess and writes frames straight to its stdin.
+See `../c2/omtbridge.py` for the Python side that spawns and feeds it.
 
 ## Quick start
 
@@ -60,13 +61,16 @@ ssh root@<pi-ip> 'chmod +x /opt/omt-camera-bridge/omt-camera-bridge'
 
 ## Running it
 
-```
-omt-camera-bridge [--socket PATH] [--name NAME] [--width W] [--height H] [--fps N]
+`c2` spawns this (see `[omt_bridge]` in `camera.ini` / `c2/config.py`)
+when `omt_bridge.enabled` is set, passing its own binary path, name, and
+resolution/framerate as arguments.
+
+```bash
+omt-camera-bridge [--name NAME] [--width W] [--height H] [--fps N]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--socket` | `/run/c2-video.sock` | Unix socket the Python app is serving raw I420 frames on |
 | `--name` | `C2 Camera` | OMT source name - shows up as `<hostname> (<name>)` in receivers |
 | `--width` | `1920` | Must match the Python app's "main" stream width (must be even) |
 | `--height` | `1080` | Must match the Python app's "main" stream height |

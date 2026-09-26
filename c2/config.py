@@ -65,9 +65,11 @@ class SensorConfig:
             return libcamera.controls.draft.NoiseReductionModeEnum.Off
 
 
-class SocketBridgeConfig:
+class OmtBridgeConfig:
     def __init__(self):
         self.enabled = True
+        self.binary = "/opt/omt-camera-bridge/omt-camera-bridge"
+        self.name = "C2 Camera"
 
 
 class AudioConfig:
@@ -89,7 +91,7 @@ class Config:
         self.aux = AuxConfig()
         self.encoder = EncoderConfig()
         self.sensor = SensorConfig()
-        self.socket_bridge = SocketBridgeConfig()
+        self.omt_bridge = OmtBridgeConfig()
         self.audio = AudioConfig()
 
         self.load_defaults()
@@ -143,7 +145,7 @@ class Config:
             self.sensor.framerate = min(30, self.sensor.framerate)
 
     def save_config(self):
-        sections = ["sensor", "output", "monitor", "aux", "encoder", "socket_bridge", "audio"]
+        sections = ["sensor", "output", "monitor", "aux", "encoder", "omt_bridge", "audio"]
         parser = configparser.ConfigParser()
         for section in sections:
             parser.add_section(section)

@@ -21,7 +21,7 @@ from c2.control import ControlCollection, StateControl, Log10Mapper
 from c2.drmoutput import DRMOutput
 from c2.edid import check_edid
 from c2.gamma import open_isp, generate_curve, set_isp_gamma
-from c2.socketbridge import SocketVideoBridge
+from c2.omtbridge import OmtBridge
 
 from c2.user_interface import UI
 
@@ -54,8 +54,9 @@ class Camera:
         self.ui_size = self.config.monitor.mode
 
         # Set initial camera mode and controls
+        main_size = (1920, 1080)
         preview_config = self.cam.create_preview_configuration(main={
-            "size": (1920, 1080),
+            "size": main_size,
             "format": "YUV420"
         },
             lores={
@@ -87,14 +88,19 @@ class Camera:
             self.stream = PyavOutput("rtsp://127.0.0.1:8554/cam", format="rtsp")
             self.encoder.output = self.stream
 
-        if self.config.socket_bridge.enabled:
-            self.socket_bridge = SocketVideoBridge("/run/c2-video.sock")
+        if self.config.omt_bridge.enabled:
+            self.omt_bridge = OmtBridge(
+                self.config.omt_bridge.binary,
+                self.config.omt_bridge.name,
+                main_size[0], main_size[1],
+                self.config.sensor.framerate,
+            )
 
         def preview(request):
             self.update_preview(request)
-            if self.config.socket_bridge.enabled and self.socket_bridge.has_client():
+            if self.config.omt_bridge.enabled and self.omt_bridge.is_running():
                 with MappedArray(request, "main") as mapped:
-                    self.socket_bridge.push_frame(mapped.array.tobytes())
+                    self.omt_bridge.push_frame(mapped.array.tobytes())
 
         self.cam.pre_callback = preview
 

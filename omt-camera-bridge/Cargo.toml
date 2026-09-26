@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
 license = "MIT"
-description = "Reads raw YUV420 camera frames from the c2 Python app over a Unix socket, converts to UYVY, and streams them out over Open Media Transport (OMT)."
+description = "Reads raw YUV420 camera frames from the c2 Python app over stdin, converts to UYVY, and streams them out over Open Media Transport (OMT)."
 
 [[bin]]
 name = "omt-camera-bridge"
