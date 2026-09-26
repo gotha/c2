@@ -18,6 +18,12 @@ openmediatransport = { git = "https://github.com/MikanseiLaboratory/openmediatra
 # Pure-Rust, SIMD-accelerated (incl. NEON) YUV pixel format conversion -
 # https://docs.rs/yuv. Used for I420 -> UYVY422 instead of a hand-rolled loop.
 yuv = "0.8"
+# Structured logging - tracing-journald writes events straight to journald's
+# native protocol (with the binary-safe framing and memfd fallback we'd
+# otherwise have to hand-roll ourselves).
+tracing = "0.1"
+tracing-journald = "0.3"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 
 [profile.release]
 lto = "thin"

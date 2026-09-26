@@ -10,7 +10,11 @@ use std::io::{self, Read};
 use std::time::{Duration, Instant};
 
 use openmediatransport::{Codec, ColorSpace, Discovery, FrameType, MediaFrame, Sender};
+use tracing_subscriber::layer::SubscriberExt;
 use yuv::{BufferStoreMut, YuvPackedImageMut, YuvPlanarImage, yuv420_to_uyvy422};
+
+mod metrics;
+use metrics::Metrics;
 
 struct Args {
     name: String,
@@ -92,6 +96,10 @@ fn i420_to_uyvy(i420: &[u8], width: usize, height: usize) -> Vec<u8> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // No "F_" prefix on our own fields - we already namespace them with `omt_`.
+    let journald_layer = tracing_journald::Layer::new()?.with_field_prefix(None);
+    tracing::subscriber::set_global_default(tracing_subscriber::registry().with(journald_layer))?;
+
     let args = Args::parse();
     if args.width % 2 != 0 {
         return Err("--width must be even (UYVY is 4:2:2)".into());
@@ -114,12 +122,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let epoch = Instant::now();
     let mut last_sub = false;
 
-    // Wall-clock, not core-time: `yuv` parallelizes internally, so a low
-    // percentage here doesn't mean low total CPU - check top/htop for that.
+    // Wall-clock: both stages parallelize internally, so low % != low CPU (check top/htop).
     let frame_budget = Duration::from_secs_f64(1.0 / args.fps_n.max(1) as f64);
-    let mut conversion_time = Duration::ZERO;
-    let mut converted_frames: u64 = 0;
-    let mut stats_since = Instant::now();
+    let mut metrics = Metrics::new(Duration::from_secs(5), frame_budget, args.fps_n);
     let mut stdin = io::stdin().lock();
 
     loop {
@@ -140,10 +145,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue; // still drain stdin above so Python never blocks
         }
 
-        let conv_start = Instant::now();
-        let data = i420_to_uyvy(&i420_buf, width, height);
-        conversion_time += conv_start.elapsed();
-        converted_frames += 1;
+        let data = metrics.time_conversion(|| i420_to_uyvy(&i420_buf, width, height));
+        metrics.record_frame();
 
         let frame = MediaFrame {
             frame_type: FrameType::VIDEO,
@@ -159,21 +162,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             data,
             ..Default::default()
         };
-        sender.send_video(frame)?;
-
-        if stats_since.elapsed() >= Duration::from_secs(5) {
-            let avg = conversion_time / converted_frames.max(1) as u32;
-            let pct_of_frame_budget = avg.as_secs_f64() / frame_budget.as_secs_f64() * 100.0;
-            println!(
-                "omt-camera-bridge: conversion avg {:.2}ms/frame ({:.1}% of one frame's time budget @ {} fps) over {} frames",
-                avg.as_secs_f64() * 1000.0,
-                pct_of_frame_budget,
-                args.fps_n,
-                converted_frames
-            );
-            conversion_time = Duration::ZERO;
-            converted_frames = 0;
-            stats_since = Instant::now();
-        }
+        metrics.time_send(|| sender.send_video(frame))?;
+        metrics.maybe_report();
     }
 }
