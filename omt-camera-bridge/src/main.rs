@@ -8,13 +8,14 @@
 //! Usage:
 //!   omt-camera-bridge [--name NAME] [--width W] [--height H] [--fps N]
 
-use std::io::{self, Read};
 use std::time::{Duration, Instant};
 
 use openmediatransport::{Codec, ColorSpace, Discovery, FrameType, MediaFrame, Sender};
 use tracing_subscriber::layer::SubscriberExt;
 
+mod frame_source;
 mod metrics;
+use frame_source::FrameSource;
 use metrics::Metrics;
 
 struct Args {
@@ -88,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let width = args.width as usize;
     let height = args.height as usize;
     let uyvy_size = width * height * 2;
-    let mut uyvy_buf = vec![0u8; uyvy_size];
+    let frames = FrameSource::spawn(uyvy_size);
 
     let epoch = Instant::now();
     let mut last_sub = false;
@@ -96,13 +97,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Wall-clock: send_video parallelizes internally, so a low ms/frame here
     // doesn't mean low CPU - check top/htop for that.
     let mut metrics = Metrics::new(Duration::from_secs(5));
-    let mut stdin = io::stdin().lock();
 
     loop {
-        if stdin.read_exact(&mut uyvy_buf).is_err() {
+        let Some(data) = frames.next_frame() else {
             println!("omt-camera-bridge: stdin closed, exiting");
             return Ok(());
-        }
+        };
 
         sender.poll_accept()?;
         sender.poll_peer_metadata()?;
@@ -113,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             last_sub = subscribed;
         }
         if !subscribed {
-            continue; // still drain stdin above so Python never blocks
+            continue; // the reader thread still drains stdin regardless, so Python never blocks
         }
 
         metrics.record_frame();
@@ -129,7 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             frame_rate_d: args.fps_d,
             aspect_ratio: args.width as f32 / args.height.max(1) as f32,
             color_space: ColorSpace::Bt709,
-            data: uyvy_buf.clone(),
+            data,
             ..Default::default()
         };
         metrics.time_send(|| sender.send_video(frame))?;
