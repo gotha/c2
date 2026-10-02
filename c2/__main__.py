@@ -10,7 +10,7 @@ import requests
 from PIL import Image, ImageDraw
 
 from libcamera import ColorSpace
-from picamera2 import Picamera2, MappedArray
+from picamera2 import Picamera2, MappedArray, Platform
 from picamera2.encoders import H264Encoder
 from picamera2.outputs import PyavOutput
 import numpy as np
@@ -168,7 +168,18 @@ class Camera:
 
     def load_tuning(self):
         sensor_model = self.cam.camera_properties["Model"]
-        cal_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "calibration")
+        # The VC4 ISP (Pi 4) and the PiSP ISP (Pi 5) take incompatible tuning
+        # data - libcamera refuses to load a file whose "target" doesn't match
+        # the hardware - so the calibration is split per ISP, the same way
+        # libcamera ships its own tuning under ipa/rpi/{vc4,pisp}.
+        isp = "vc4" if Picamera2.platform == Platform.VC4 else "pisp"
+        cal_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "calibration", isp)
+        if not os.path.isfile(os.path.join(cal_dir, f"{sensor_model}.json")):
+            raise RuntimeError(
+                f"No {isp} calibration for sensor {sensor_model}. Tuning data is "
+                f"ISP-specific and cannot be reused across ISP generations - it "
+                f"has to be re-derived against the {isp} ISP."
+            )
         self.cam.close()
         self.cal = self.cam.load_tuning_file(f"{sensor_model}.json", dir=cal_dir)
         self.cam = Picamera2(tuning=self.cal)
