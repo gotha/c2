@@ -66,6 +66,8 @@ class AudioManager:
         mux.setenum(item)
 
     def start_loop(self, q):
+        if not self.audio_enabled:
+            return
         cmd = ["alsaloop-fosdem", "-C", f"hw:CARD={self._config.audio.input_device},DEV=0", "-P",
                f"hdmi:CARD={self._config.audio.output_device},DEV=0"]
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE,

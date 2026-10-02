@@ -37,7 +37,15 @@ class Camera:
 
     def __init__(self):
         self.cam = Picamera2()
+        # The primary corrector is applied by writing a gamma curve straight
+        # into the bcm2835 ISP through a driver-private V4L2 control, which
+        # only exists on the VC4 pipeline (Pi 4 and earlier). PiSP (Pi 5)
+        # configures gamma from the tuning data instead and exposes no
+        # equivalent control, so there the corrector is inert.
         self.isp = open_isp()
+        if self.isp is None:
+            print("No bcm2835 ISP found - the primary colour corrector "
+                  "(lift/gamma/gain/offset) is unavailable on this ISP.")
         self.state = {}
         self.edid = None
         self.preview_w = 1
@@ -504,6 +512,8 @@ class Camera:
         self.cam.set_controls({"AwbEnable": enabled})
 
     def update_gamma_curve(self):
+        if self.isp is None:
+            return
         curve = generate_curve(self.controls.cc_lift.value.value, self.controls.cc_gamma.value.value,
                                self.controls.cc_gain.value.value, self.controls.cc_offset.value.value)
         set_isp_gamma(self.isp, curve)
