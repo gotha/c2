@@ -32,10 +32,14 @@ class MisirkaAPI:
                 desc += f"Range: {control.min} {control.unit} - {control.max} {control.unit}\n"
             elif control.min.value is not None:
                 desc += f"Range: {control.min} - {control.max}\n"
-            if control.choices is not None:
+            # An empty choice list means the backing hardware isn't there to
+            # enumerate (the audio muxes do this when the c2audio ADC is
+            # absent), so treat it like no choices at all - handing misirka an
+            # empty example list makes it panic and takes the whole API down.
+            if control.choices:
                 desc += "Choices: " + ", ".join(control.choices)
             examples = [control.value.value]
-            if control.choices is not None:
+            if control.choices:
                 examples = control.choices
             self.msk.add_topic(name, desc, examples, True)
             self.msk.publish(name, control.value.value)
